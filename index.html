@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Look</title>
+</head>
+<body>
+    <select id="backend">
+        <option value="webgl">WebGL</option>
+        <option value="wasm">Web Assembly</option>
+        <option value="cpu">CPU</option>
+    </select><br>
+    <img src="kitty.png" height="224" alt="A picture of a cat" /><br>
+    <input type="button" onclick="runTest();" value="Test" disabled><br>
+    <p id="result"></p>
+    <script src="imagenet_classes.js" type="module"></script>
+    <script type="module">
+        import { IMAGENET_CLASSES } from "./imagenet_classes.js";
+        window.model_classes = [];
+        Object.keys(IMAGENET_CLASSES).forEach(key => {
+          model_classes[key] = IMAGENET_CLASSES[key];
+        })
+    </script>
+    <script src="tf-3.9.0.min.js" type="text/javascript"></script>
+    <script src="tf-backend-wasm.js" type="text/javascript"></script>
+    <script src="mobilenet-2.1.0.js" type="text/javascript"></script>
+    <script type="text/javascript">
+      const IMAGE_SIZE = 224;
+      function cropImage(img) {
+        const size = Math.min(img.shape[0], img.shape[1]);
+        const centerHeight = img.shape[0] / 2;
+        const beginHeight = centerHeight - (size / 2);
+        const centerWidth = img.shape[1] / 2;
+        const beginWidth = centerWidth - (size / 2);
+        const slice = img.slice([beginHeight, beginWidth, 0], [size, size, 3]);
+        return size === IMAGE_SIZE ? slice : tf.image.resizeBilinear(slice, [IMAGE_SIZE, IMAGE_SIZE]);
+      }
+
+      async function classifyFrame(src) {
+        let start = new Date().getTime();
+        window.model.classify(src, 5).then(predictions => {
+          console.log('Predictions: ');
+          console.log(predictions);
+          document.getElementById('result').innerText = 'Runtime: ' + (new Date().getTime() - start);
+        });
+        // const logits = tf.tidy(() => {
+        //   const img = cropImage(tf.browser.fromPixels(src));
+        //   const batchedImage = img.expandDims(0);
+        //   const scaled = batchedImage.toFloat().div(tf.scalar(127)).sub(tf.scalar(1));
+        //
+        //   // Make a prediction, first using the transfer model activation and then
+        //   // feeding that into the user provided model
+        //
+        //   const predictions = window.model.model.predict(scaled);
+        //   return predictions.as1D();
+        // });
+        //
+        // const topPredictions = await logits.topk(5);
+        //
+        // const predictionIndices = await topPredictions.indices.data();
+        // const predictionValues = await topPredictions.values.data();
+        //
+        // let result = [];
+        // logits.dispose();
+        //
+        // for (let i = 0; i < 5; i++) {
+        //   const currentIndex = predictionIndices[i];
+        //   const currentValue = predictionValues[i];
+        //
+        //   const labelName = modelLabels[currentIndex];
+        //
+        //   result.push([labelName, currentValue.toFixed(5)]);
+        // }
+        //
+        // document.getElementById('result').innerText = JSON.stringify(result);
+        // window.requestAnimationFrame(classifyFrame);
+      }
+
+      mobilenet.load({version: 2, alpha: 1.0, modelUrl: 'http://localhost:8000/model.json'}).then(model => {
+        window.model = model;
+        document.querySelector('input').removeAttribute('disabled');
+        // navigator.mediaDevices.getUserMedia({
+        //   video: {facingMode: 'user'},
+        //   audio: false
+        // })
+        //   .then(stream => document.getElementById('vide').srcObject = stream)
+        //   .catch(e => console.error(e));
+      })
+
+      function runTest() {
+        tf.setBackend(document.getElementById('backend').value).then(() => {
+          classifyFrame(document.querySelector('img'));
+        })
+      }
+    </script>
+</body>
+</html>
